@@ -1,8 +1,8 @@
 # Sizzle Street Kitchen — 3D Cooking Rush
 
-[![Competition](https://img.shields.io/badge/make.fun-best--cooking--game-blue)](https://make.fun/bounty/best-cooking-game-20261125-0137)
-[![Play](https://img.shields.io/badge/play-on%20makefun.gg-green)](https://make.fun/bounty/best-cooking-game-20261125-0137)
-[![Entry](https://img.shields.io/badge/entry-make.fun-orange)](https://make.fun/bounty/best-cooking-game-20261125-0137)
+[![make.fun · best-cooking-game-20261125-0137](https://make.fun/badge/best-cooking-game-20261125-0137.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
+[![rank](https://make.fun/badge/best-cooking-game-20261125-0137/AkmalJ/sizzle-street-kitchen/rank.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
+[![reward](https://make.fun/badge/best-cooking-game-20261125-0137/AkmalJ/sizzle-street-kitchen/reward.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
 
 A complete, original cooking game that plays offline in desktop Chrome from
 static files — no build step, no network requests, no external assets.
