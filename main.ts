@@ -24,6 +24,10 @@ if (existsSync(shotsSource)) {
   cpSync(shotsSource, shotsTarget, { recursive: true });
 }
 
+// The dossier caps below mirror the scorer's own limits, so an entry this
+// program produces is one the gate can accept: at most 4 screenshots of at
+// most 256 KiB each, at most 993 game files totalling at most 48 MiB, and no
+// game path longer than 1000 bytes.
 const dossierText = buildDossier(outputDir, {
   text_max_bytes: 163840,
   screenshots: { max: 4, max_bytes: 262144 },

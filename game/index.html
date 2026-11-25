@@ -41,7 +41,7 @@ function newOrder(){const r=RECIPES[Math.floor(rnd()*RECIPES.length)];orders.pus
 function startGame(){score=0;combo=0;served=0;missed=0;dayLeft=90;orders=[];plate=[];phase="build";newOrder();newOrder();state="play";msg="First orders are in! Build the highlighted dish.";msgT=3;sfx("good");}
 function cur(){return orders[0]||null;}
 function pick(id){if(state!=="play"||phase!=="build")return;const o=cur();if(!o)return;const want=o.recipe.items[plate.length];if(id===want){plate.push(id);sfx("pick");if(plate.length>=o.recipe.items.length){phase="cook";cookTotal=o.recipe.cook;cookLeft=cookTotal;msg="On the stove! Watch the cook timer...";msgT=2;}}else{combo=0;shake=6;sfx("bad");msg="Wrong ingredient! Follow the order board.";msgT=2;}}
-function serve(){const o=cur();if(!o)return;const timeBonus=Math.max(0,Math.round(o.left/4));const gain=o.recipe.price+timeBonus+combo*2;score+=gain;combo++;served++;msg="Served "+o.recipe.name+"! +$"+gain+"  Combo x"+combo;msgT=2.5;sfx("serve");orders.shift();plate=[];phase="build";if(orders.length<2)newOrder();}
+function serve(){const o=cur();if(!o)return;const timeBonus=Math.max(0,Math.round(o.left/4));const tip=combo>=3?5:0;const gain=o.recipe.price+timeBonus+combo*2+tip;score+=gain;combo++;served++;msg="Served "+o.recipe.name+"! +$"+gain+(tip?" (incl. $5 combo tip)":"")+"  Combo x"+combo;msgT=2.5;sfx("serve");orders.shift();plate=[];phase="build";while(orders.length<2)newOrder();}
 // ---- drawing helpers ----
 function box(x,y,w,h,d,col,dark,top){ctx.fillStyle=dark;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+d,y-d);ctx.lineTo(x+w+d,y-d);ctx.lineTo(x+w,y);ctx.closePath();ctx.fill();ctx.fillStyle=top||col;ctx.beginPath();ctx.moveTo(x,y-d);ctx.lineTo(x+d,y-d*2);ctx.lineTo(x+w+d,y-d*2);ctx.lineTo(x+w,y-d);ctx.closePath();ctx.fill();ctx.fillStyle=col;ctx.fillRect(x,y,w,h);}
 function txt(s,x,y,size,col,align,bold){ctx.fillStyle=col;ctx.font=(bold?"bold ":"")+size+"px Verdana,Arial";ctx.textAlign=align||"left";ctx.fillText(s,x,y);}
@@ -83,6 +83,10 @@ function drawKitchen(){
    plate.forEach((id,i)=>drawIngredientShape(id,528,398-i*9,30));}
  // flames when cooking
  if(phase==="cook"){for(let i=0;i<7;i++){const fx=478+((i*37)%110);ctx.fillStyle=i%2?"#ff7a1a":"#ffd23e";ctx.beginPath();ctx.moveTo(fx,428);ctx.lineTo(fx+8,402-((i*13)%16));ctx.lineTo(fx+16,428);ctx.closePath();ctx.fill();}}
+ // steam wisps rise from the pan while a dish is on the stove
+ if(phase==="cook"){ctx.strokeStyle="rgba(255,255,255,0.55)";ctx.lineWidth=3;for(let i=0;i<4;i++){const sx=492+i*26;ctx.beginPath();ctx.moveTo(sx,388);ctx.bezierCurveTo(sx-8,366,sx+8,352,sx,332);ctx.stroke();}}
+ // golden glow ring pulses around the plate when a dish is ready to serve
+ if(phase==="serve"){ctx.strokeStyle="#ffd23e";ctx.lineWidth=5;ctx.beginPath();ctx.ellipse(950,428,108,36,0,0,7);ctx.stroke();ctx.strokeStyle="rgba(255,210,62,0.4)";ctx.lineWidth=11;ctx.beginPath();ctx.ellipse(950,428,116,41,0,0,7);ctx.stroke();}
  // serving plate right
  ctx.fillStyle="#ffffff";ctx.beginPath();ctx.ellipse(950,428,96,30,0,0,7);ctx.fill();ctx.fillStyle="#dfe8ee";ctx.beginPath();ctx.ellipse(950,424,72,21,0,0,7);ctx.fill();
  if(phase==="serve"||phase==="cook"){const o=cur();if(o)o.recipe.items.forEach((id,i)=>drawIngredientShape(id,950,420-i*10,36));}
