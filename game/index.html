@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sizzle Street Kitchen — 3D Cooking Rush</title>
+<style>
+html,body{margin:0;padding:0;background:#1a0f0a;height:100%;overflow:hidden;font-family:Verdana,Arial,sans-serif}
+#wrap{display:flex;align-items:center;justify-content:center;height:100%}
+canvas{width:min(100vw,177.7vh);height:auto;aspect-ratio:16/9;background:#2b1608;box-shadow:0 0 60px #000}
+</style></head><body>
+<div id="wrap"><canvas id="cv" width="1280" height="720"></canvas></div>
+<script>
+"use strict";
+// Sizzle Street Kitchen: isometric 3D-feel cooking rush.
+// Orders arrive on the board (top). Click ingredients on the counter (or keys 1-8)
+// in the exact order shown, move the dish to the stove, wait for the cook timer,
+// plate it and serve it before the order timer runs out. Score, combo, day timer.
+const cv=document.getElementById("cv"),ctx=cv.getContext("2d");
+const W=1280,H=720;
+const ING=[
+ {id:"bun",name:"Bun",key:"1",col:"#e8a84c",dark:"#b97a26"},
+ {id:"patty",name:"Patty",key:"2",col:"#8a4b2a",dark:"#5e2f16"},
+ {id:"cheese",name:"Cheese",key:"3",col:"#ffd23e",dark:"#e0a800"},
+ {id:"tomato",name:"Tomato",key:"4",col:"#e6392e",dark:"#a81f16"},
+ {id:"lettuce",name:"Lettuce",key:"5",col:"#57c84a",dark:"#2f8a26"},
+ {id:"egg",name:"Egg",key:"6",col:"#fff3c4",dark:"#f0b429"},
+ {id:"bacon",name:"Bacon",key:"7",col:"#c44b6d",dark:"#8a2440"},
+ {id:"sauce",name:"Sauce",key:"8",col:"#ff7a1a",dark:"#c24e00"}];
+const RECIPES=[
+ {name:"Sunset Burger",items:["bun","patty","cheese","tomato","lettuce"],price:18,cook:4},
+ {name:"Cheesy Melt Stack",items:["bun","cheese","patty","cheese","sauce"],price:21,cook:5},
+ {name:"Garden Crunch",items:["bun","lettuce","tomato","egg","sauce"],price:16,cook:3},
+ {name:"Bacon Dawn Burger",items:["bun","patty","bacon","egg","cheese"],price:24,cook:6},
+ {name:"Saucy Double",items:["bun","patty","sauce","patty","tomato"],price:22,cook:5}];
+let AC=null;function beep(f,d,type){try{if(!AC)AC=new (window.AudioContext||window.webkitAudioContext)();const o=AC.createOscillator(),g=AC.createGain();o.type=type||"square";o.frequency.value=f;g.gain.value=0.06;o.connect(g);g.connect(AC.destination);o.start();g.gain.exponentialRampToValueAtTime(0.001,AC.currentTime+(d||0.09));o.stop(AC.currentTime+(d||0.09));}catch(e){}}
+function sfx(kind){if(kind==="pick")beep(660,0.07);else if(kind==="good"){beep(880,0.1);setTimeout(()=>beep(1320,0.14),90);}else if(kind==="bad")beep(160,0.2,"sawtooth");else if(kind==="cook")beep(440,0.08,"triangle");else if(kind==="serve"){beep(990,0.1);setTimeout(()=>beep(1480,0.16),100);}}
+const qs=new URLSearchParams(location.search);const SHOT=qs.get("shot")||"";
+let seed=parseInt(qs.get("seed")||"7",10);function rnd(){seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff;}
+let state="title",score=0,combo=0,served=0,missed=0,dayLeft=90,lastT=0;
+let orders=[],plate=[],phase="build",cookLeft=0,cookTotal=0,msg="",msgT=0,shake=0;
+function newOrder(){const r=RECIPES[Math.floor(rnd()*RECIPES.length)];orders.push({recipe:r,left:34+r.items.length*3,max:34+r.items.length*3});}
+function startGame(){score=0;combo=0;served=0;missed=0;dayLeft=90;orders=[];plate=[];phase="build";newOrder();newOrder();state="play";msg="First orders are in! Build the highlighted dish.";msgT=3;sfx("good");}
+function cur(){return orders[0]||null;}
+function pick(id){if(state!=="play"||phase!=="build")return;const o=cur();if(!o)return;const want=o.recipe.items[plate.length];if(id===want){plate.push(id);sfx("pick");if(plate.length>=o.recipe.items.length){phase="cook";cookTotal=o.recipe.cook;cookLeft=cookTotal;msg="On the stove! Watch the cook timer...";msgT=2;}}else{combo=0;shake=6;sfx("bad");msg="Wrong ingredient! Follow the order board.";msgT=2;}}
+function serve(){const o=cur();if(!o)return;const timeBonus=Math.max(0,Math.round(o.left/4));const gain=o.recipe.price+timeBonus+combo*2;score+=gain;combo++;served++;msg="Served "+o.recipe.name+"! +$"+gain+"  Combo x"+combo;msgT=2.5;sfx("serve");orders.shift();plate=[];phase="build";if(orders.length<2)newOrder();}
+// ---- drawing helpers ----
+function box(x,y,w,h,d,col,dark,top){ctx.fillStyle=dark;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+d,y-d);ctx.lineTo(x+w+d,y-d);ctx.lineTo(x+w,y);ctx.closePath();ctx.fill();ctx.fillStyle=top||col;ctx.beginPath();ctx.moveTo(x,y-d);ctx.lineTo(x+d,y-d*2);ctx.lineTo(x+w+d,y-d*2);ctx.lineTo(x+w,y-d);ctx.closePath();ctx.fill();ctx.fillStyle=col;ctx.fillRect(x,y,w,h);}
+function txt(s,x,y,size,col,align,bold){ctx.fillStyle=col;ctx.font=(bold?"bold ":"")+size+"px Verdana,Arial";ctx.textAlign=align||"left";ctx.fillText(s,x,y);}
+function rr(x,y,w,h,r,col){ctx.fillStyle=col;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill();}
+function drawIngredientShape(id,cx,cy,s){const g=ING.find(i=>i.id===id);if(id==="bun"){ctx.fillStyle=g.col;ctx.beginPath();ctx.ellipse(cx,cy,s*0.9,s*0.5,0,Math.PI,0);ctx.fill();ctx.fillStyle="#fff0b3";for(let k=0;k<5;k++){ctx.beginPath();ctx.arc(cx-s*0.5+k*s*0.25,cy-s*0.22,2.4,0,7);ctx.fill();}}
+else if(id==="patty"){ctx.fillStyle=g.col;ctx.beginPath();ctx.ellipse(cx,cy,s*0.95,s*0.42,0,0,7);ctx.fill();ctx.fillStyle=g.dark;ctx.beginPath();ctx.ellipse(cx,cy-2,s*0.8,s*0.3,0,0,7);ctx.fill();}
+else if(id==="cheese"){ctx.fillStyle=g.col;ctx.beginPath();ctx.moveTo(cx-s,cy);ctx.lineTo(cx+s,cy-s*0.3);ctx.lineTo(cx+s*0.7,cy+s*0.5);ctx.lineTo(cx-s*0.6,cy+s*0.45);ctx.closePath();ctx.fill();}
+else if(id==="tomato"){ctx.fillStyle=g.col;ctx.beginPath();ctx.arc(cx,cy,s*0.62,0,7);ctx.fill();ctx.fillStyle="#ff9a8a";ctx.beginPath();ctx.arc(cx,cy,s*0.34,0,7);ctx.fill();}
+else if(id==="lettuce"){ctx.fillStyle=g.col;for(let k=0;k<5;k++){ctx.beginPath();ctx.arc(cx-s*0.5+k*s*0.25,cy, s*0.3,0,7);ctx.fill();}}
+else if(id==="egg"){ctx.fillStyle="#ffffff";ctx.beginPath();ctx.ellipse(cx,cy,s*0.8,s*0.55,0,0,7);ctx.fill();ctx.fillStyle="#ffb800";ctx.beginPath();ctx.arc(cx,cy,s*0.3,0,7);ctx.fill();}
+else if(id==="bacon"){ctx.strokeStyle=g.col;ctx.lineWidth=s*0.32;ctx.beginPath();ctx.moveTo(cx-s*0.8,cy);ctx.bezierCurveTo(cx-s*0.3,cy-s*0.5,cx+s*0.3,cy+s*0.5,cx+s*0.8,cy);ctx.stroke();ctx.strokeStyle="#ffd9e2";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(cx-s*0.8,cy);ctx.bezierCurveTo(cx-s*0.3,cy-s*0.5,cx+s*0.3,cy+s*0.5,cx+s*0.8,cy);ctx.stroke();}
+else{ctx.fillStyle=g.col;ctx.beginPath();ctx.arc(cx,cy,s*0.5,0,7);ctx.fill();ctx.fillStyle="#fff";txt("~",cx,cy+6,18,"#fff","center",true);}}
+function drawKitchen(){
+ // wall + floor (isometric feel)
+ const grad=ctx.createLinearGradient(0,0,0,H);grad.addColorStop(0,"#f7c873");grad.addColorStop(0.55,"#e88f4a");grad.addColorStop(0.551,"#9c5a28");grad.addColorStop(1,"#6e3a14");ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+ ctx.strokeStyle="rgba(120,60,10,0.35)";ctx.lineWidth=2;for(let i=0;i<9;i++){ctx.beginPath();ctx.moveTo(i*160-80,396);ctx.lineTo(i*160+120,720);ctx.stroke();}
+ for(let i=0;i<5;i++){ctx.beginPath();ctx.moveTo(0,430+i*70);ctx.lineTo(W,430+i*70);ctx.stroke();}
+ // wall tiles
+ ctx.fillStyle="rgba(255,255,255,0.13)";for(let x=0;x<W;x+=64)for(let y=70;y<380;y+=64)ctx.fillRect(x+2,y+2,60,60);
+ // hanging lamps
+ for(const lx of [220,640,1060]){ctx.strokeStyle="#3a2410";ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(lx,0);ctx.lineTo(lx,52);ctx.stroke();ctx.fillStyle="#ffe27a";ctx.beginPath();ctx.moveTo(lx-34,86);ctx.lineTo(lx,50);ctx.lineTo(lx+34,86);ctx.closePath();ctx.fill();ctx.fillStyle="rgba(255,226,122,0.25)";ctx.beginPath();ctx.moveTo(lx-70,300);ctx.lineTo(lx,86);ctx.lineTo(lx+70,300);ctx.closePath();ctx.fill();}
+ // shelves with jars
+ box(880,96,330,16,10,"#8a4b1f","#5e2f16","#a8642c");
+ const jarCols=["#e6392e","#57c84a","#ffd23e","#ff7a1a","#c44b6d","#4ab8c8"];
+ jarCols.forEach((c,i)=>{const jx=906+i*52;rr(jx,52,34,44,6,c);rr(jx,46,34,10,4,"#5e2f16");});
+ txt("SPICES",1045,130,15,"#fff7e0","center",true);
+ // window
+ rr(60,92,240,150,10,"#8fd8ef");rr(60,92,240,150,10,"rgba(255,255,255,0)");ctx.strokeStyle="#5e2f16";ctx.lineWidth=8;ctx.strokeRect(60,92,240,150);ctx.beginPath();ctx.moveTo(180,92);ctx.lineTo(180,242);ctx.moveTo(60,167);ctx.lineTo(300,167);ctx.stroke();
+ ctx.fillStyle="#ffb703";ctx.beginPath();ctx.arc(248,126,24,0,7);ctx.fill();txt("SIZZLE STREET",180,272,17,"#7a2d12","center",true);
+ // main counter (big 3D block)
+ box(70,470,1140,120,26,"#c97b3d","#8a4b1f","#eda75e");
+ box(70,452,1140,22,26,"#f3f0e6","#b9b2a0","#ffffff");
+ // stove on counter left-centre
+ box(430,382,300,74,18,"#37414f","#1e242e","#59687c");
+ for(const [sx,sy] of [[478,414],[578,414],[478,442],[578,442]]){ctx.fillStyle="#10151c";ctx.beginPath();ctx.arc(sx,sy,17,0,7);ctx.fill();ctx.strokeStyle="#ff5a1a";ctx.lineWidth=3;ctx.beginPath();ctx.arc(sx,sy,11,0,7);ctx.stroke();}
+ txt("STOVE",655,448,16,"#ffd23e","center",true);
+ // pan on stove when cooking / building
+ if(phase==="cook"||plate.length){ctx.fillStyle="#14181f";ctx.beginPath();ctx.ellipse(528,404,64,20,0,0,7);ctx.fill();ctx.fillStyle="#232a35";ctx.fillRect(586,396,52,10);
+   plate.forEach((id,i)=>drawIngredientShape(id,528,398-i*9,30));}
+ // flames when cooking
+ if(phase==="cook"){for(let i=0;i<7;i++){const fx=478+((i*37)%110);ctx.fillStyle=i%2?"#ff7a1a":"#ffd23e";ctx.beginPath();ctx.moveTo(fx,428);ctx.lineTo(fx+8,402-((i*13)%16));ctx.lineTo(fx+16,428);ctx.closePath();ctx.fill();}}
+ // serving plate right
+ ctx.fillStyle="#ffffff";ctx.beginPath();ctx.ellipse(950,428,96,30,0,0,7);ctx.fill();ctx.fillStyle="#dfe8ee";ctx.beginPath();ctx.ellipse(950,424,72,21,0,0,7);ctx.fill();
+ if(phase==="serve"||phase==="cook"){const o=cur();if(o)o.recipe.items.forEach((id,i)=>drawIngredientShape(id,950,420-i*10,36));}
+ txt("PLATE — READY TO SERVE",950,486,15,"#fff7e0","center",true);
+ // chef character
+ const cx0=180,cy0=330;ctx.fillStyle="#f2b183";ctx.beginPath();ctx.arc(cx0,cy0,34,0,7);ctx.fill();
+ ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(cx0,cy0-34,36,Math.PI,0);ctx.fill();ctx.fillRect(cx0-36,cy0-36,72,12);
+ ctx.fillStyle="#fff";rr(cx0-42,cy0+30,84,74,12,"#ffffff");ctx.fillStyle="#e6392e";ctx.fillRect(cx0-42,cy0+52,84,10);
+ ctx.fillStyle="#222";ctx.beginPath();ctx.arc(cx0-12,cy0-2,4,0,7);ctx.arc(cx0+12,cy0-2,4,0,7);ctx.fill();ctx.strokeStyle="#7a2d12";ctx.lineWidth=3;ctx.beginPath();ctx.arc(cx0,cy0+10,12,0.15*Math.PI,0.85*Math.PI);ctx.stroke();
+ txt("CHEF NARA",cx0,cy0+128,14,"#fff7e0","center",true);
+ // customers right
+ [[1120,300,"#4ab8c8"],[1196,330,"#c44b6d"]].forEach(([px,py,c])=>{ctx.fillStyle="#f2b183";ctx.beginPath();ctx.arc(px,py,24,0,7);ctx.fill();ctx.fillStyle=c;rr(px-28,py+22,56,52,10,c);ctx.fillStyle="#222";ctx.beginPath();ctx.arc(px-8,py-2,3,0,7);ctx.arc(px+8,py-2,3,0,7);ctx.fill();});
+}
+function drawOrderBoard(){
+ rr(330,18,620,104,12,"#fff7e0");ctx.strokeStyle="#7a2d12";ctx.lineWidth=4;ctx.strokeRect(330,18,620,104);
+ txt("ORDER BOARD",640,46,22,"#7a2d12","center",true);
+ orders.slice(0,2).forEach((o,i)=>{const x=352+i*300;rr(x,56,284,56,8,i===0?"#ffe9a8":"#f3ead2");
+  txt(o.recipe.name,x+10,78,16,"#4a2408","left",true);txt("$"+o.recipe.price+"  cook "+o.recipe.cook+"s",x+10,100,13,"#7a2d12","left");
+  const frac=Math.max(0,o.left/o.max);ctx.fillStyle="#d8cdb4";ctx.fillRect(x+150,64,124,12);ctx.fillStyle=frac>0.4?"#57c84a":(frac>0.2?"#ffb800":"#e6392e");ctx.fillRect(x+150,64,124*frac,12);
+  txt(Math.ceil(o.left)+"s",x+212,92,12,"#4a2408","center",true);});
+ if(!orders.length)txt("No orders — great job!",640,88,18,"#2f8a26","center",true);
+ // current recipe checklist
+ const o=cur();if(o&&state==="play"){rr(976,18,284,104,12,"rgba(30,20,10,0.82)");txt("BUILD IN ORDER:",1118,42,15,"#ffd23e","center",true);
+  o.recipe.items.forEach((id,i)=>{const g=ING.find(v=>v.id===id);const done=i<plate.length,now=i===plate.length;txt((done?"✓ ":now?"► ":"· ")+g.name,992,66+i*11+ (i>2?0:0),13,done?"#57c84a":now?"#ffffff":"#cbbfa5","left",i===now);});}
+}
+function drawCounter(){
+ txt("INGREDIENT COUNTER — click or press 1-8",640,516,16,"#fff7e0","center",true);
+ ING.forEach((g,i)=>{const x=92+i*138;const o=cur();const want=o&&phase==="build"?o.recipe.items[plate.length]:null;
+  rr(x,528,124,86,12,want===g.id?"#fff3c4":"#f7ead0");if(want===g.id){ctx.strokeStyle="#ff7a1a";ctx.lineWidth=5;ctx.strokeRect(x,528,124,86);}
+  drawIngredientShape(g.id,x+62,562,34);txt(g.name,x+62,600,14,"#4a2408","center",true);txt("["+g.key+"]",x+62,540,12,"#a8642c","center",true);});
+ // assembly stack centre-bottom label
+ if(plate.length&&phase==="build"){txt("ASSEMBLING: "+plate.length+" / "+(cur()?cur().recipe.items.length:0)+" layers on the pan",640,638,17,"#ffe27a","center",true);}
+}
+function drawHUD(){
+ rr(14,18,300,104,12,"rgba(30,20,10,0.82)");
+ txt("SCORE  $"+score,30,50,24,"#ffd23e","left",true);
+ txt("Combo x"+combo+"   Served "+served+"   Missed "+missed,30,78,15,"#ffffff","left");
+ const df=Math.max(0,dayLeft/90);ctx.fillStyle="#4a3a28";ctx.fillRect(30,90,268,14);ctx.fillStyle=df>0.3?"#57c84a":"#e6392e";ctx.fillRect(30,90,268*df,14);
+ txt("DAY TIMER  "+Math.ceil(dayLeft)+"s",164,101,12,"#ffffff","center",true);
+ if(phase==="cook"){rr(430,140,420,54,12,"rgba(30,20,10,0.88)");txt("COOKING... "+cookLeft.toFixed(1)+"s",640,166,20,"#ff9a3e","center",true);const f=1-cookLeft/cookTotal;ctx.fillStyle="#4a3a28";ctx.fillRect(450,176,380,10);ctx.fillStyle="#ff7a1a";ctx.fillRect(450,176,380*f,10);}
+ if(msgT>0&&msg) {rr(340,652,600,44,12,"rgba(30,20,10,0.85)");txt(msg,640,680,16,"#ffffff","center",true);}
+}
+function drawTitle(){ctx.fillStyle="rgba(20,8,2,0.72)";ctx.fillRect(0,0,W,H);rr(290,150,700,400,24,"#fff7e0");txt("SIZZLE STREET",640,238,52,"#c33d12","center",true);txt("K I T C H E N",640,286,30,"#7a2d12","center",true);txt("A 3D cooking rush: build orders layer by layer,",640,336,19,"#4a2408","center");txt("cook on the stove, plate it, serve it hot!",640,364,19,"#4a2408","center");txt("Click ingredients (or keys 1-8) in order • SPACE = serve",640,404,16,"#7a2d12","center");rr(490,436,300,62,14,"#e6392e");txt("CLICK TO START",640,476,24,"#ffffff","center",true);txt("90 seconds • combos pay bonus • don't let orders expire!",640,528,15,"#7a2d12","center");}
+function drawEnd(){ctx.fillStyle="rgba(20,8,2,0.74)";ctx.fillRect(0,0,W,H);rr(330,170,620,360,24,"#fff7e0");txt("DAY OVER!",640,248,46,"#c33d12","center",true);txt("Score  $"+score,640,310,30,"#4a2408","center",true);txt("Dishes served: "+served+"    Orders missed: "+missed,640,352,19,"#4a2408","center");txt("Best combo reached x"+combo,640,384,19,"#4a2408","center");rr(490,420,300,62,14,"#57c84a");txt("PLAY AGAIN",640,460,24,"#ffffff","center",true);}
+function render(){ctx.save();if(shake>0){ctx.translate((rnd()-0.5)*shake,(rnd()-0.5)*shake);}drawKitchen();drawOrderBoard();drawCounter();drawHUD();ctx.restore();if(state==="title")drawTitle();if(state==="over")drawEnd();}
+// deterministic screenshot scenes
+function setupShot(){if(!SHOT)return;state="play";score=145;combo=3;served=4;missed=1;dayLeft=57;orders=[];seed=11;newOrder();newOrder();
+ if(SHOT==="start"){orders=[];seed=11;newOrder();newOrder();plate=[];phase="build";dayLeft=88;score=0;combo=0;served=0;missed=0;msg="New order! Build the Sunset Burger.";msgT=9;}
+ if(SHOT==="play"||SHOT==="assembly"){const o=cur();plate=o.recipe.items.slice(0,3);phase="build";msg="Dish mid-assembly: 3 of "+o.recipe.items.length+" layers stacked!";msgT=9;}
+ if(SHOT==="cook"){const o=cur();plate=o.recipe.items.slice();phase="cook";cookTotal=o.recipe.cook;cookLeft=2.4;msg="On the stove — almost ready!";msgT=9;}
+ if(SHOT==="serve"){const o=cur();plate=o.recipe.items.slice();phase="serve";score=210;combo=4;served=5;msg="Plate ready to serve — press SPACE!";msgT=9;}
+ if(SHOT==="end"){state="over";score=265;served=7;missed=2;combo=5;}}
+setupShot();
+function update(dt){if(state!=="play"||SHOT)return;dayLeft-=dt;if(msgT>0)msgT-=dt;if(shake>0)shake-=dt*20;
+ orders.forEach(o=>o.left-=dt);while(orders.length&&orders[0].left<=0){orders.shift();missed++;combo=0;plate=[];phase="build";sfx("bad");msg="Order expired!";msgT=2;if(orders.length<2)newOrder();}
+ if(phase==="cook"){cookLeft-=dt;if(Math.floor(cookLeft*4)!==Math.floor((cookLeft+dt)*4))sfx("cook");if(cookLeft<=0){phase="serve";msg="Cooked! Press SPACE to serve the plate.";msgT=3;beep(1180,0.12);}}
+ if(dayLeft<=0){state="over";sfx("bad");}}
+function loop(t){const dt=Math.min(0.05,(t-lastT)/1000||0);lastT=t;update(dt);render();requestAnimationFrame(loop);}requestAnimationFrame(loop);
+cv.addEventListener("pointerdown",e=>{const r=cv.getBoundingClientRect();const x=(e.clientX-r.left)*W/r.width,y=(e.clientY-r.top)*H/r.height;
+ if(state==="title"||state==="over"){startGame();return;}
+ if(phase==="serve"&&(x>850&&x<1050&&y>390&&y<470)){serve();return;}
+ ING.forEach((g,i)=>{const bx=92+i*138;if(x>=bx&&x<=bx+124&&y>=528&&y<=614)pick(g.id);});});
+window.addEventListener("keydown",e=>{if(state==="title"||state==="over"){if(e.key===" "||e.key==="Enter")startGame();return;}
+ const g=ING.find(v=>v.key===e.key);if(g)pick(g.id);if(e.key===" "){e.preventDefault();if(phase==="serve")serve();}});
+</script></body></html>
